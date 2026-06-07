@@ -25,7 +25,6 @@
             box-sizing: border-box;
         }
 
-        /* True Full-Width Layout Container */
         .container { 
             background: white; 
             padding: 30px; 
@@ -88,7 +87,6 @@
             box-sizing: border-box;
         }
         
-        /* Stacked Vertical Workspace Flow to maximize table tracking width */
         .workspace-stack { 
             display: flex;
             flex-direction: column;
@@ -106,7 +104,6 @@
             box-sizing: border-box;
         }
         
-        /* Interactive Heatmap Matrix Grid Styles */
         .matrix-wrapper { 
             overflow-x: auto; 
             margin-top: 15px; 
@@ -138,7 +135,7 @@
         table.matrix-table td.mod-name { 
             text-align: left; 
             font-weight: 500; 
-            min-width: 320px; /* Expanded for longer Leeds module titles */
+            min-width: 320px; 
             background-color: #f1f5f9; 
             position: sticky;
             left: 0;
@@ -149,7 +146,6 @@
         .score-1 { background-color: #fef9c3; color: #854d0e; font-weight: 600; } 
         .score-2 { background-color: #dcfce7; color: #166534; font-weight: 600; } 
         
-        /* Interactive Chat Container Optimized for Full-Width Row Display */
         .chat-container { 
             background: #fff; 
             border: 1px solid var(--border-color); 
@@ -259,6 +255,7 @@
 
 <script>
     let activeQueryUrl = '';
+    let lastScannedDataset = null;
 
     async function runScanner() {
         const urlInput = document.getElementById('urlInput').value.trim();
@@ -294,6 +291,8 @@
                 statusDiv.style.borderColor = "#c3e6cb";
                 statusDiv.innerText = `Success! Calculated matrix weights for ${data.modules.length} modules. Conversational mode unlocked.`;
                 matrixTitle.innerText = `Heat Map: ${data.programme_title}`;
+                
+                lastScannedDataset = data.raw_payload; 
                 downloadBtn.style.display = "inline-block";
                 
                 buildHeatMap(data.modules, data.programme_scores);
@@ -381,8 +380,17 @@
     }
 
     function downloadStructuredJson() {
-        if (!activeQueryUrl) return;
-        window.open(`/api/download_raw?url=${encodeURIComponent(activeQueryUrl)}`, '_blank');
+        if (!lastScannedDataset) {
+            alert("No dataset found in browser memory.");
+            return;
+        }
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(lastScannedDataset, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", "deterministic_sdg_audit.json");
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
     }
 
     function getSdgShortName(idx) {

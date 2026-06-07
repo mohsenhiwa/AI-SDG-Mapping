@@ -21,7 +21,6 @@ load_dotenv()
 app = Flask(__name__)
 ai_client = genai.Client()
 
-# Local cache file path where the backend saves the scraped json structure safely
 CACHE_FILE_PATH = "cached_audit_matrix.json"
 CORE_COLUMNS = ["code", "title", "credits", "semester"]
 
@@ -212,15 +211,16 @@ def scan_website():
     try:
         with open(CACHE_FILE_PATH, "w", encoding="utf-8") as cache_file:
             json.dump(structured_json, cache_file, indent=2, ensure_ascii=False)
-        logging.info("Successfully cached complete curriculum text profiles into server-side JSON file.")
     except Exception as cache_err:
         logging.error(f"Failed to write disk cache file structure: {cache_err}")
 
+    # Synchronized Consistency: Returns raw structured data directly inside the API payload 
     return jsonify({
         "success": True,
         "programme_title": structured_json["programme"]["title"],
         "modules": [{"code": m["code"], "title": m["title"], "scores": {k: v["score"] for k, v in m["sdg_scores"].items()}} for m in structured_json["modules"]],
-        "programme_scores": {k: v["score"] for k, v in structured_json["programme"]["programme_sdg_scores"].items()}
+        "programme_scores": {k: v["score"] for k, v in structured_json["programme"]["programme_sdg_scores"].items()},
+        "raw_payload": structured_json
     })
 
 
@@ -267,27 +267,6 @@ def chat_module():
         return jsonify({"reply": response.text})
     except Exception as e:
         return jsonify({"reply": f"AI conversational loop error: {str(e)}"}), 500
-
-
-# === HIGH-SPEED INSTANT COMPRESSION DOWNLOAD ROUTE ===
-@app.route('/api/download_raw', methods=['GET'])
-def download_raw():
-    # Instantly serves the pre-calculated, cached data directly from the disk
-    # to avoid re-scraping 39 pages and timing out Render's 30-second gateway.
-    if not os.path.exists(CACHE_FILE_PATH):
-        return "Error: No cached audit dataset found. Please click 'Run Hybrid Audit' first.", 400
-        
-    try:
-        with open(CACHE_FILE_PATH, "r", encoding="utf-8") as cache_file:
-            structured_json = json.load(cache_file)
-            
-        return Response(
-            json.dumps(structured_json, indent=2),
-            mimetype="application/json",
-            headers={"Content-disposition": "attachment; filename=deterministic_sdg_audit.json"}
-        )
-    except Exception as e:
-        return f"Error reading cached dataset file: {str(e)}", 500
 
 
 if __name__ == '__main__':
