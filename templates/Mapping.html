@@ -120,14 +120,19 @@
         table.matrix-table { 
             width: 100%; 
             border-collapse: collapse; 
-            font-size: 13px; 
+            font-size: 12px; 
             text-align: center; 
+            table-layout: fixed; /* Enforces strict mathematical grid limits across row cells */
         }
 
         table.matrix-table th, table.matrix-table td { 
-            padding: 12px 10px; 
+            padding: 12px 6px; /* Tightened cell padding to optimize tracking boundaries */
             border: 1px solid var(--border-color); 
-            min-width: 65px;
+            width: 48px; /* Compact width allocation to safely fit SDG1 through SDG17 */
+            box-sizing: border-box;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         table.matrix-table th { 
@@ -136,10 +141,12 @@
             font-weight: 600; 
         }
 
-        table.matrix-table td.mod-name { 
+        table.matrix-table th.mod-header, table.matrix-table td.mod-name { 
             text-align: left; 
             font-weight: 500; 
-            min-width: 320px; 
+            width: 260px; /* Carefully proportioned base container size for the module labels */
+            min-width: 260px;
+            max-width: 260px;
             background-color: #f1f5f9; 
             position: sticky;
             left: 0;
@@ -221,12 +228,12 @@
                 <table class="matrix-table" id="heatmapTable">
                     <thead>
                         <tr>
-                            <th>Module / Core Framework</th>
-                            <th>SDG1</th><th>SDG2</th><th>SDG3</th><th>SDG4</th><th>SDG5</th><th>SDG6</th><th>SDG7</th><th>SDG8</th><th>SDG9</th><th>SDG10</th><th>SDG11</th><th>SDG12</th><th>SDG13</th><th>SDG14</th><th>SDG15</th><th>SDG16</th><th>SDG17</th>
+                            <th class="mod-header">Module / Core Framework</th>
+                            <th>SDG1</th><th>SDG2</th><th>SDG3</th><th>SDG4</th><th>SDG5</th><th>SDG6</th><th>SDG7</th><th>SDG8</th><th>SDG9</th><th>SDG10</th><th>SDG11</th><th>SDG12</th><th>SDG13</th><th>SDG14</th><th>SDG15</th><th>SDG16</th><th><th>SDG17</th></th>
                         </tr>
                     </thead>
                     <tbody id="matrixBody">
-                        <tr><td colspan="18" style="color:var(--text-muted); padding:40px; font-size: 14px;">Execute a curriculum link scan to populate the automated scoring grid.</td></tr>
+                        <tr><td colspan="18" style="color:var(--text-muted); padding:40px; font-size: 14px; text-align: center; width: 100%;">Execute a curriculum link scan to populate the automated scoring grid.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -279,7 +286,7 @@
         statusDiv.style.color = "#004085";
         statusDiv.style.borderColor = "#b8daff";
         statusDiv.innerText = "Running async web-scrapers and generating deterministic score matrices...";
-        matrixBody.innerHTML = `<tr><td colspan="18" style="padding:40px; color:#0056b3; font-size:14px;">Computing algorithmic text checks across module nodes... Please wait.</td></tr>`;
+        matrixBody.innerHTML = `<tr><td colspan=\"18\" style=\"padding:40px; color:#0056b3; font-size:14px; text-align: center; width:100%;\">Computing algorithmic text checks across module nodes... Please wait.</td></tr>`;
 
         try {
             const response = await fetch('/api/scan', {
@@ -319,7 +326,7 @@
         tbody.innerHTML = ''; 
 
         modules.forEach(m => {
-            let rowHtml = `<tr><td class="mod-name"><strong>${m.code}</strong> - ${m.title}</td>`;
+            let rowHtml = `<tr><td class="mod-name" title="${m.code} - ${m.title}"><strong>${m.code}</strong> - ${m.title}</td>`;
             for(let i=1; i<=17; i++) {
                 let s = m.scores[`SDG ${i} - ` + getSdgShortName(i)] || 0;
                 rowHtml += `<td class="score-${s}">${s}</td>`;
