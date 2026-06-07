@@ -25,7 +25,7 @@
             box-sizing: border-box;
         }
 
-        /* Full-Width Container */
+        /* True Full-Width Layout Container */
         .container { 
             background: white; 
             padding: 30px; 
@@ -58,9 +58,7 @@
             transition: border-color 0.2s;
         }
 
-        input[type="text"]:focus {
-            border-color: var(--primary-color);
-        }
+        input[type="text"]:focus { border-color: var(--primary-color); }
 
         button { 
             padding: 14px 28px; 
@@ -90,17 +88,13 @@
             box-sizing: border-box;
         }
         
-        /* Balanced Full-Width Workspace Layout */
-        .workspace-grid { 
-            display: grid; 
-            grid-template-columns: 1fr; 
+        /* Stacked Vertical Workspace Flow to maximize table tracking width */
+        .workspace-stack { 
+            display: flex;
+            flex-direction: column;
             gap: 30px; 
             margin-top: 25px;
             width: 100%;
-        }
-
-        @media (min-width: 1024px) { 
-            .workspace-grid { grid-template-columns: 1.1fr 0.9fr; } 
         }
 
         .panel-box { 
@@ -108,8 +102,7 @@
             border-radius: 8px; 
             border: 1px solid var(--border-color); 
             background-color: var(--bg-neutral);
-            display: flex;
-            flex-direction: column;
+            width: 100%;
             box-sizing: border-box;
         }
         
@@ -120,7 +113,7 @@
             background: #fff; 
             border: 1px solid var(--border-color); 
             border-radius: 8px; 
-            flex: 1;
+            width: 100%;
         }
 
         table.matrix-table { 
@@ -133,6 +126,7 @@
         table.matrix-table th, table.matrix-table td { 
             padding: 12px 10px; 
             border: 1px solid var(--border-color); 
+            min-width: 65px;
         }
 
         table.matrix-table th { 
@@ -144,25 +138,27 @@
         table.matrix-table td.mod-name { 
             text-align: left; 
             font-weight: 500; 
-            min-width: 240px; 
+            min-width: 320px; /* Expanded for longer Leeds module titles */
             background-color: #f1f5f9; 
             position: sticky;
             left: 0;
+            z-index: 2;
         }
 
         .score-0 { background-color: #fee2e2; color: #991b1b; font-weight: 600; } 
         .score-1 { background-color: #fef9c3; color: #854d0e; font-weight: 600; } 
         .score-2 { background-color: #dcfce7; color: #166534; font-weight: 600; } 
         
-        /* Interactive Chat Interface Styles */
+        /* Interactive Chat Container Optimized for Full-Width Row Display */
         .chat-container { 
             background: #fff; 
             border: 1px solid var(--border-color); 
             border-radius: 8px; 
-            padding: 20px; 
+            padding: 24px; 
             display: flex; 
             flex-direction: column; 
-            height: 600px; 
+            height: 500px; 
+            width: 100%;
             box-sizing: border-box;
         }
 
@@ -179,7 +175,7 @@
             white-space: pre-wrap; 
         }
 
-        .chat-input-area { display: flex; gap: 10px; }
+        .chat-input-area { display: flex; gap: 10px; width: 100%; }
         .chat-input-area input { 
             flex: 1; 
             padding: 12px 16px; 
@@ -218,7 +214,7 @@
 
     <div id="status"></div>
     
-    <div class="workspace-grid">
+    <div class="workspace-stack">
         <div class="panel-box">
             <h3 id="matrixTitle">Programme SDG Heat Map Matrix</h3>
             <div class="matrix-wrapper">
@@ -226,7 +222,7 @@
                     <thead>
                         <tr>
                             <th>Module / Core Framework</th>
-                            <th>S1</th><th>S2</th><th>S3</th><th>S4</th><th>S5</th><th>S6</th><th>S7</th><th>S8</th><th>S9</th><th>S10</th><th>S11</th><th>S12</th><th>S13</th><th>S14</th><th>S15</th><th>S16</th><th>S17</th>
+                            <th>SDG1</th><th>SDG2</th><th>SDG3</th><th>SDG4</th><th>SDG5</th><th>SDG6</th><th>SDG7</th><th>SDG8</th><th>SDG9</th><th>SDG10</th><th>SDG11</th><th>SDG12</th><th>SDG13</th><th>SDG14</th><th>SDG15</th><th>SDG16</th><th>SDG17</th>
                         </tr>
                     </thead>
                     <tbody id="matrixBody">
@@ -242,18 +238,20 @@
             </p>
         </div>
 
-        <div class="chat-container">
-            <h3>Interactive Syllabus Dialogue Box</h3>
-            <label for="moduleSelect" style="font-size:13px; font-weight:600; margin-bottom:6px; color:var(--text-main);">SELECT TARGET COMPONENT TO QUERY:</label>
-            <select id="moduleSelect" class="module-dropdown" disabled>
-                <option value="">(Run scan to index program modules...)</option>
-            </select>
-            
-            <div class="chat-history" id="chatBox">Welcome to the Interactive Audit Assistant. Run a hybrid scan above, then select a module from the dropdown to ask targeted questions about its syllabus, alignment details, or ways to improve its scores.</div>
-            
-            <div class="chat-input-area">
-                <input type="text" id="chatInput" placeholder="Ask a question about this module's syllabus..." disabled onkeypress="if(event.key==='Enter') sendChatMessage()">
-                <button id="sendBtn" class="btn-primary" onclick="sendChatMessage()" disabled>Ask AI</button>
+        <div class="panel-box" style="padding:0; border:none; background:none;">
+            <div class="chat-container">
+                <h3>Interactive Syllabus Dialogue Box</h3>
+                <label for="moduleSelect" style="font-size:13px; font-weight:600; margin-bottom:6px; color:var(--text-main);">SELECT TARGET COMPONENT TO QUERY:</label>
+                <select id="moduleSelect" class="module-dropdown" disabled>
+                    <option value="">(Run scan to index program modules...)</option>
+                </select>
+                
+                <div class="chat-history" id="chatBox">Welcome to the Interactive Audit Assistant. Run a hybrid scan above, then select a module from the dropdown to ask targeted questions about its syllabus, alignment details, or ways to improve its scores.</div>
+                
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" placeholder="Ask a question about this module's syllabus..." disabled onkeypress="if(event.key==='Enter') sendChatMessage()">
+                    <button id="sendBtn" class="btn-primary" onclick="sendChatMessage()" disabled>Ask AI</button>
+                </div>
             </div>
         </div>
     </div>
