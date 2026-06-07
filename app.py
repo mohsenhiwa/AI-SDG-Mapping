@@ -21,7 +21,7 @@ load_dotenv()
 app = Flask(__name__)
 ai_client = genai.Client()
 
-# Local cache file path where the backend will save the scraped json structure safely
+# Local cache file path where the backend saves the scraped json structure safely
 CACHE_FILE_PATH = "cached_audit_matrix.json"
 CORE_COLUMNS = ["code", "title", "credits", "semester"]
 
@@ -209,7 +209,6 @@ def scan_website():
     structured_json, crawl_error = extract_and_score_curriculum(target_url)
     if crawl_error: return jsonify({"error": crawl_error}), 400
 
-    # FIX: Write massive text data structures directly to a local JSON database file, completely bypassing cookie size caps
     try:
         with open(CACHE_FILE_PATH, "w", encoding="utf-8") as cache_file:
             json.dump(structured_json, cache_file, indent=2, ensure_ascii=False)
@@ -231,7 +230,6 @@ def chat_module():
     selected_module_code = data.get('module_code')
     user_message = data.get('message')
     
-    # FIX: Read structural matrix records directly from the local server file instead of session cookies
     if not os.path.exists(CACHE_FILE_PATH):
         return jsonify({"reply": "Cache store file missing. Please click 'Run Hybrid Audit' to extract the curriculum dataset."}), 400
 
@@ -271,13 +269,26 @@ def chat_module():
         return jsonify({"reply": f"AI conversational loop error: {str(e)}"}), 500
 
 
+# === HIGH-SPEED INSTANT COMPRESSION DOWNLOAD ROUTE ===
 @app.route('/api/download_raw', methods=['GET'])
 def download_raw():
-    target_url = request.args.get('url')
-    if not target_url: return "Error: Missing target parameter.", 400
-    structured_json, crawl_error = extract_and_score_curriculum(target_url)
-    if crawl_error: return f"Error: {crawl_error}", 400
-    return Response(json.dumps(structured_json, indent=2), mimetype="application/json", headers={"Content-disposition": "attachment; filename=deterministic_sdg_audit.json"})
+    # Instantly serves the pre-calculated, cached data directly from the disk
+    # to avoid re-scraping 39 pages and timing out Render's 30-second gateway.
+    if not os.path.exists(CACHE_FILE_PATH):
+        return "Error: No cached audit dataset found. Please click 'Run Hybrid Audit' first.", 400
+        
+    try:
+        with open(CACHE_FILE_PATH, "r", encoding="utf-8") as cache_file:
+            structured_json = json.load(cache_file)
+            
+        return Response(
+            json.dumps(structured_json, indent=2),
+            mimetype="application/json",
+            headers={"Content-disposition": "attachment; filename=deterministic_sdg_audit.json"}
+        )
+    except Exception as e:
+        return f"Error reading cached dataset file: {str(e)}", 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
