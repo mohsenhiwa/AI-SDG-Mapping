@@ -357,7 +357,6 @@
         document.getElementById('chatBox').innerText = "System calibrated successfully! Choose a module from the dropdown above and query any metrics or syllabus topics directly.";
     }
 
-    // CLIENT-SIDE LOCAL INTELLIGENCE ENGINE (100% RELIABLE)
     function sendChatMessage() {
         const select = document.getElementById('moduleSelect');
         const chatInput = document.getElementById('chatInput');
@@ -369,7 +368,6 @@
         if (!code) { alert("Please select a target module to analyze."); return; }
         if (!msg) return;
 
-        // Find the module object inside the browser's global memory dataset
         const currentMod = lastScannedDataset.modules.find(m => m.code === code);
         chatInput.value = ''; 
 
@@ -378,7 +376,6 @@
         if (!currentMod) {
             reply = "Error tracking module data object in local workspace buffer memory.";
         } else {
-            // Check user intent keywords
             if (msg.includes("improve") || msg.includes("upgrade") || msg.includes("raise") || msg.includes("score")) {
                 let lowScores = [];
                 for (let k in currentMod.sdg_scores) {
@@ -398,16 +395,14 @@
                 reply += currentMod.syllabus ? `"${currentMod.syllabus}"` : "_No structural syllabus block text listed under this specific resource identifier._";
             }
             else {
-                // Default context: Search for relevant SDG scores or matches
                 let scoreSummary = [];
                 let activeMatch = false;
 
                 for (let k in currentMod.sdg_scores) {
                     let sMeta = currentMod.sdg_scores[k];
-                    // If user named an SDG or if a keyword hit occurred
                     if (sMeta.score > 0 || msg.includes(k.toLowerCase()) || msg.length < 4) {
                         if (sMeta.score > 0) {
-                            scoreSummary.append(`* **${k}** [Score ${sMeta.score} — ${sMeta.classification}]: Verified via evidence keyword counts: _${sMeta.evidence_math_summary}_`);
+                            scoreSummary.push(`* **${k}** [Score ${sMeta.score} — ${sMeta.classification}]: Verified via evidence keyword counts: _${sMeta.evidence_math_summary}_`);
                             activeMatch = true;
                         }
                     }
@@ -420,7 +415,6 @@
             }
         }
 
-        // Output results to the UI display container instantly with zero network lag
         chatBox.innerHTML += `\n\n<hr style="border:0; border-top:1px dashed #cbd5e1; margin:15px 0;"><strong>You:</strong> ${msg.toUpperCase()}\n\n<strong>System Intelligence Layer:</strong>\n${reply}`;
         chatBox.scrollTop = chatBox.scrollHeight; 
     }
