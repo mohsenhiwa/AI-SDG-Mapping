@@ -6,6 +6,8 @@ from flask import Flask, render_template, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+# RE-INSERTED: Restores the asynchronous engine concurrency threads to clear the linting errors
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(
     level=logging.INFO,
@@ -182,7 +184,6 @@ def extract_and_score_curriculum(programme_url):
         mod_scores = [m["sdg_scores"][sdg]["score"] for m in data_payload["modules"]]
         sig_count = sum(1 for s in mod_scores if s == 2)
         som_count = sum(1 for s in mod_scores if s == 1)
-        # FIXED: Corrected spelling to look for som_count variable framework context
         prog_score = 2 if sig_count >= 2 else (1 if sig_count >= 1 or som_count >= 2 else 0)
         data_payload["programme"]["programme_sdg_scores"][sdg] = {"score": prog_score}
 
