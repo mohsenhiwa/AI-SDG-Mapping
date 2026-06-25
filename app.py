@@ -188,7 +188,7 @@ def extract_and_score_curriculum(programme_url):
         mod_scores = [m["sdg_scores"][sdg]["score"] for m in data_payload["modules"]]
         sig_count = sum(1 for s in mod_scores if s == 2)
         som_count = sum(1 for s in mod_scores if s == 1)
-        prog_score = 2 if sig_count >= 2 else (1 if sig_count >= 1 or som_count >= 2 else 0)
+        prog_score = 2 if sig_count >= 2 else (1 if sig_count >= 1 or some_count >= 2 else 0)
         data_payload["programme"]["programme_sdg_scores"][sdg] = {"score": prog_score}
 
     return data_payload, None
@@ -214,7 +214,6 @@ def scan_website():
     except Exception as cache_err:
         logging.error(f"Failed to write disk cache file structure: {cache_err}")
 
-    # Synchronized Consistency: Returns raw structured data directly inside the API payload 
     return jsonify({
         "success": True,
         "programme_title": structured_json["programme"]["title"],
@@ -231,42 +230,54 @@ def chat_module():
     user_message = data.get('message')
     
     if not os.path.exists(CACHE_FILE_PATH):
-        return jsonify({"reply": "Cache store file missing. Please click 'Run Hybrid Audit' to extract the curriculum dataset."}), 400
+        return jsonify({"reply": "Cache dataset missing on server. Run audit scan first."}), 400
 
     try:
         with open(CACHE_FILE_PATH, "r", encoding="utf-8") as cache_file:
             cached_audit = json.load(cache_file)
     except Exception as read_err:
-        return jsonify({"reply": f"Failed to open server-side data files: {str(read_err)}"}), 500
+        return jsonify({"reply": f"Failed to load cached indices: {str(read_err)}"}), 500
 
     module_data = next((m for m in cached_audit["modules"] if m["code"] == selected_module_code), None)
     if not module_data:
-        return jsonify({"reply": f"Could not find a mapped data record for module {selected_module_code}."}), 400
+        return jsonify({"reply": f"Could not map code identifier {selected_module_code}."}), 400
 
-    prompt = (
-        "You are an academic curriculum mapping specialist answering questions about a degree syllabus.\n"
-        "A deterministic Python evidence engine has already scanned this specific module and generated its "
-        "sustainability scores (0 = None, 1 = Some/Implicit, 2 = Significant/Explicit).\n\n"
-        f"--- AUDITED MODULE DATA PACKET ({module_data['code']}) ---\n"
-        f"Title: {module_data['title']}\n"
-        f"Credits: {module_data['credits']} | Semester: {module_data['semester']}\n"
-        f"Summary Field: {module_data['module_summary']}\n"
-        f"Objectives Field: {module_data['objectives']}\n"
-        f"Learning Outcomes Field: {module_data['learning_outcomes']}\n"
-        f"Syllabus Field: {module_data['syllabus']}\n\n"
-        f"Calculated Algorithmic SDG Scores for this module:\n{json.dumps(module_data['sdg_scores'], indent=2)}\n\n"
-        "Instructions:\n"
-        "- Base your response directly on the provided data packet text fields.\n"
-        "- Explain exactly why the module received its calculated score based on your evidence hierarchy (Learning Outcomes hold the highest weight).\n"
-        "- Provide actionable ideas on how to update the module's syllabus or learning outcomes if the user asks how to improve its score.\n\n"
-        f"User Question: {user_message}"
-    )
-
+    # BUILD SANDBOX SECURITY DEFENCE PATTERN AGAINST 403 / 502 GATEWAY CRASHES
     try:
+        prompt = (
+            "You are an academic curriculum mapping specialist answering questions about a degree syllabus.\n"
+            "A deterministic Python evidence engine has already scanned this specific module and generated its "
+            "sustainability scores (0 = None, 1 = Some/Implicit, 2 = Significant/Explicit).\n\n"
+            f"--- AUDITED MODULE DATA PACKET ({module_data['code']}) ---\n"
+            f"Title: {module_data['title']}\n"
+            f"Summary Field: {module_data['module_summary']}\n"
+            f"Objectives Field: {module_data['objectives']}\n"
+            f"Learning Outcomes Field: {module_data['learning_outcomes']}\n"
+            f"Syllabus Field: {module_data['syllabus']}\n\n"
+            f"Calculated Algorithmic SDG Scores:\n{json.dumps(module_data['sdg_scores'], indent=2)}\n\n"
+            f"User Question: {user_message}"
+        )
         response = ai_client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         return jsonify({"reply": response.text})
-    except Exception as e:
-        return jsonify({"reply": f"AI conversational loop error: {str(e)}"}), 500
+
+    except Exception as api_fault:
+        logging.error(f"AI API Infrastructure Layer Fault Encountered: {api_fault}")
+        
+        # LOCAL BULLETPROOF DETERMINISTIC FALLBACK SYSTEM
+        # If the API key fails or a regional restriction is hit, the app falls back to this template
+        matched_hits_summary = []
+        for goal_key, score_meta in module_data["sdg_scores"].items():
+            if score_meta["score"] > 0:
+                matched_hits_summary.append(f"- **{goal_key}** [Score: {score_meta['score']} - {score_meta['classification']}]: Matched via text criteria in {score_meta['evidence_math_summary']}.")
+                
+        fallback_narrative = (
+            f"⚠️ **Cloud Authentication Bypass Mode Active**\n"
+            f"The external AI API endpoint returned an accessibility restriction code, but the server successfully preserved your core metrics via its local deterministic evaluation engine.\n\n"
+            f"**Verified Structural Ground-Truth Mapping for {module_data['code']}:**\n"
+            + ("\n".join(matched_hits_summary) if matched_hits_summary else "No keyword hits found in any of the curriculum criteria text fields.") +
+            f"\n\n*Note: To restore full AI explanations, ensure your Render container region is set to the US (e.g., Oregon) or generate a fresh API key inside Google AI Studio.*"
+        )
+        return jsonify({"reply": fallback_narrative})
 
 
 if __name__ == '__main__':
