@@ -28,7 +28,6 @@
             box-sizing: border-box;
         }
 
-        /* Full-Width Base Container Box */
         .container { 
             background: white; 
             padding: 30px; 
@@ -122,13 +121,13 @@
             border-collapse: collapse; 
             font-size: 12px; 
             text-align: center; 
-            table-layout: fixed; /* Enforces strict mathematical grid limits across row cells */
+            table-layout: fixed;
         }
 
         table.matrix-table th, table.matrix-table td { 
-            padding: 12px 6px; /* Tightened cell padding to optimize tracking boundaries */
+            padding: 12px 6px; 
             border: 1px solid var(--border-color); 
-            width: 48px; /* Compact width allocation to safely fit SDG1 through SDG17 */
+            width: 48px; 
             box-sizing: border-box;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -144,7 +143,7 @@
         table.matrix-table th.mod-header, table.matrix-table td.mod-name { 
             text-align: left; 
             font-weight: 500; 
-            width: 260px; /* Carefully proportioned base container size for the module labels */
+            width: 260px; 
             min-width: 260px;
             max-width: 260px;
             background-color: #f1f5f9; 
@@ -223,13 +222,13 @@
     
     <div class="workspace-stack">
         <div class="panel-box">
-            <h3 id="matrixTitle">Programme SDG Heat Map Matrix</h3>
+            <h3>Programme SDG Heat Map Matrix</h3>
             <div class="matrix-wrapper">
                 <table class="matrix-table" id="heatmapTable">
                     <thead>
                         <tr>
                             <th class="mod-header">Module / Core Framework</th>
-                            <th>SDG1</th><th>SDG2</th><th>SDG3</th><th>SDG4</th><th>SDG5</th><th>SDG6</th><th>SDG7</th><th>SDG8</th><th>SDG9</th><th>SDG10</th><th>SDG11</th><th>SDG12</th><th>SDG13</th><th>SDG14</th><th>SDG15</th><th>SDG16</th><th><th>SDG17</th></th>
+                            <th>SDG1</th><th>SDG2</th><th>SDG3</th><th>SDG4</th><th>SDG5</th><th>SDG6</th><th>SDG7</th><th>SDG8</th><th>SDG9</th><th>SDG10</th><th>SDG11</th><th>SDG12</th><th>SDG13</th><th>SDG14</th><th>SDG15</th><th>SDG16</th><th>SDG17</th>
                         </tr>
                     </thead>
                     <tbody id="matrixBody">
@@ -274,7 +273,6 @@
         const downloadBtn = document.getElementById('downloadBtn');
         const statusDiv = document.getElementById('status');
         const matrixBody = document.getElementById('matrixBody');
-        const matrixTitle = document.getElementById('matrixTitle');
 
         if (!urlInput) { alert('Please supply a valid prospectus link parameter.'); return; }
 
@@ -286,7 +284,7 @@
         statusDiv.style.color = "#004085";
         statusDiv.style.borderColor = "#b8daff";
         statusDiv.innerText = "Running async web-scrapers and generating deterministic score matrices...";
-        matrixBody.innerHTML = `<tr><td colspan=\"18\" style=\"padding:40px; color:#0056b3; font-size:14px; text-align: center; width:100%;\">Computing algorithmic text checks across module nodes... Please wait.</td></tr>`;
+        matrixBody.innerHTML = `<tr><td colspan="18" style="padding:40px; color:#0056b3; font-size:14px; text-align: center; width:100%;">Computing algorithmic text checks across module nodes... Please wait.</td></tr>`;
 
         try {
             const response = await fetch('/api/scan', {
@@ -301,7 +299,6 @@
                 statusDiv.style.color = "#155724";
                 statusDiv.style.borderColor = "#c3e6cb";
                 statusDiv.innerText = `Success! Calculated matrix weights for ${data.modules.length} modules. Conversational mode unlocked.`;
-                matrixTitle.innerText = `Heat Map: ${data.programme_title}`;
                 
                 lastScannedDataset = data.raw_payload; 
                 downloadBtn.style.display = "inline-block";
