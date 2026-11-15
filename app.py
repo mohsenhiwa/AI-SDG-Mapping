@@ -6,7 +6,6 @@ from flask import Flask, render_template, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-# RE-INSERTED: Restores the asynchronous engine concurrency threads to clear the linting errors
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(
@@ -17,7 +16,6 @@ logging.basicConfig(
 
 app = Flask(__name__)
 
-CACHE_FILE_PATH = "cached_audit_matrix.json"
 CORE_COLUMNS = ["code", "title", "credits", "semester"]
 
 SDG_KEYWORDS = {
@@ -48,20 +46,27 @@ SECTION_WEIGHTS = {
     "programme_specification": 0.1
 }
 
+
 def parse_section_text(soup, heading_text):
-    heading = soup.find(lambda tag: tag.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong'] 
-                        and heading_text.lower() in tag.get_text().lower())
-    if not heading: return ""
+    heading = soup.find(
+        lambda tag: tag.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong']
+        and heading_text.lower() in tag.get_text().lower()
+    )
+    if not heading:
+        return ""
     content_pieces = []
     current_element = heading.next_sibling
     while current_element:
-        if current_element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']: break
+        if current_element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+            break
         if current_element.name in ['p', 'ul', 'ol', 'div', 'span']:
             txt = current_element.get_text(separator=' ', strip=True)
-            if txt: content_pieces.append(txt)
-        elif current_element.name is None:  
+            if txt:
+                content_pieces.append(txt)
+        elif current_element.name is None:
             raw_str = current_element.strip()
-            if raw_str: content_pieces.append(raw_str)
+            if raw_str:
+                content_pieces.append(raw_str)
         current_element = current_element.next_sibling
     return "\n".join(content_pieces) if content_pieces else ""
 
@@ -73,19 +78,20 @@ def score_module_deterministically(module_record, prog_spec_text):
         evidence_segments = []
         for section, weight in SECTION_WEIGHTS.items():
             text_context = prog_spec_text if section == "programme_specification" else module_record.get(section, "")
-            if not text_context: continue
+            if not text_context:
+                continue
             section_hits = sum(len(re.findall(r'\b' + re.escape(term), text_context, re.IGNORECASE)) for term in terms)
             if section_hits > 0:
                 total_weighted_hits += (section_hits * weight)
                 evidence_segments.append(f"{section.replace('_', ' ').title()}: {section_hits} hits")
-                
+
         if total_weighted_hits == 0:
             score, classification = 0, "None"
         elif total_weighted_hits <= 2.2:
             score, classification = 1, "Some (Implicit)"
         else:
             score, classification = 2, "Significant (Explicit)"
-            
+
         scores_payload[sdg] = {
             "score": score,
             "classification": classification,
@@ -96,11 +102,18 @@ def score_module_deterministically(module_record, prog_spec_text):
 
 def crawl_single_module(mod_code, mod_title, mod_credits, mod_semester, module_absolute_url, headers, prog_spec_text):
     module_record = {
-        "code": mod_code, "title": mod_title, "credits": mod_credits, "semester": mod_semester,
-        "module_url": module_absolute_url, "module_summary": "", "objectives": "", "learning_outcomes": "", "syllabus": ""
+        "code": mod_code,
+        "title": mod_title,
+        "credits": mod_credits,
+        "semester": mod_semester,
+        "module_url": module_absolute_url,
+        "module_summary": "",
+        "objectives": "",
+        "learning_outcomes": "",
+        "syllabus": ""
     }
     try:
-        mod_resp = requests.get(module_absolute_url, timeout=6, headers=headers)
+        mod_resp = requests.get(module_absolute_url, timeout=8, headers=headers)
         if mod_resp.status_code == 200:
             mod_soup = BeautifulSoup(mod_resp.text, 'html.parser')
             module_record["module_summary"] = parse_section_text(mod_soup, "Module Summary")
@@ -109,7 +122,7 @@ def crawl_single_module(mod_code, mod_title, mod_credits, mod_semester, module_a
             module_record["syllabus"] = parse_section_text(mod_soup, "Syllabus")
     except Exception as e:
         logging.error(f"Error crawling module link {mod_code}: {e}")
-        
+
     module_record["sdg_scores"] = score_module_deterministically(module_record, prog_spec_text)
     return module_record
 
@@ -117,64 +130,86 @@ def crawl_single_module(mod_code, mod_title, mod_credits, mod_semester, module_a
 def extract_and_score_curriculum(programme_url):
     headers = {'User-Agent': 'PrecisionLeedsHybridEngineCrawler/4.0'}
     try:
-        response = requests.get(programme_url, timeout=12, headers=headers)
+        response = requests.get(programme_url, timeout=15, headers=headers)
         response.raise_for_status()
-    except Exception as e: return None, f"Network fault on base URL: {str(e)}"
-        
+    except Exception as e:
+        return None, f"Network fault on base URL: {str(e)}"
+
     soup = BeautifulSoup(response.text, 'html.parser')
-    prog_spec_heading = soup.find(lambda tag: tag.name in ['h1', 'h2', 'h3', 'h4'] and "programme specification" in tag.get_text().lower())
+    prog_spec_heading = soup.find(
+        lambda tag: tag.name in ['h1', 'h2', 'h3', 'h4'] and "programme specification" in tag.get_text().lower()
+    )
     prog_spec_content = ""
     if prog_spec_heading:
         curr = prog_spec_heading.next_sibling
         while curr:
-            if curr.name in ['h1', 'h2', 'h3', 'table'] or (curr.name == 'div' and 'table-responsive' in curr.get('class', [])): break
+            if curr.name in ['h1', 'h2', 'h3', 'table'] or (curr.name == 'div' and 'table-responsive' in curr.get('class', [])):
+                break
             if curr.get_text:
                 txt = curr.get_text(strip=True)
-                if txt: prog_spec_content += txt + "\n"
+                if txt:
+                    prog_spec_content += txt + "\n"
             curr = curr.next_sibling
     else:
         intro_box = soup.find('div', class_='programme-description')
-        prog_spec_content = intro_box.get_text(separator='\n', strip=True) if intro_box else soup.get_text(separator=' ', strip=True)[:1500]
+        prog_spec_content = (
+            intro_box.get_text(separator='\n', strip=True)
+            if intro_box
+            else soup.get_text(separator=' ', strip=True)[:1500]
+        )
 
     page_title = soup.find('h1').get_text(strip=True) if soup.find('h1') else "Academic Programme Specification"
     prog_spec_cleaned = prog_spec_content.strip()
-    
+
     data_payload = {
-        "programme": {"title": page_title, "programme_specification": prog_spec_cleaned, "programme_sdg_scores": {}},
+        "programme": {
+            "title": page_title,
+            "programme_specification": prog_spec_cleaned,
+            "programme_sdg_scores": {}
+        },
         "modules": []
     }
-    
+
     all_tables = soup.find_all('table')
     visited_module_codes = set()
     crawl_tasks = []
-    
+
     for table in all_tables:
         header_row = table.find('tr') or table.find('thead')
-        if not header_row: continue
+        if not header_row:
+            continue
         columns = [th.get_text(strip=True).lower() for th in header_row.find_all(['th', 'td'])]
-        if not all(col in columns for col in CORE_COLUMNS): continue
+        if not all(col in columns for col in CORE_COLUMNS):
+            continue
         col_indices = {col: columns.index(col) for col in CORE_COLUMNS}
-        
+
         for row in table.find_all('tr')[1:]:
             cells = row.find_all(['td', 'th'])
-            if len(cells) < len(columns): continue
+            if len(cells) < len(columns):
+                continue
             mod_code = cells[col_indices["code"]].get_text(strip=True)
             mod_title = cells[col_indices["title"]].get_text(strip=True)
             mod_credits = cells[col_indices["credits"]].get_text(strip=True)
             mod_semester = cells[col_indices["semester"]].get_text(strip=True)
-            
-            if not mod_code or len(mod_code) > 15 or mod_code in visited_module_codes: continue 
+
+            if not mod_code or len(mod_code) > 15 or mod_code in visited_module_codes:
+                continue
             link_element = cells[col_indices["code"]].find('a', href=True) or cells[col_indices["title"]].find('a', href=True)
-            if not link_element: continue
-            
+            if not link_element:
+                continue
+
             module_absolute_url = urljoin(programme_url, link_element['href'])
             visited_module_codes.add(mod_code)
             crawl_tasks.append((mod_code, mod_title, mod_credits, mod_semester, module_absolute_url))
 
-    if not crawl_tasks: return None, "No verified criteria layout tables found."
+    if not crawl_tasks:
+        return None, "No verified criteria layout tables found."
 
-    with ThreadPoolExecutor(max_workers=min(10, len(crawl_tasks))) as executor:
-        futures = {executor.submit(crawl_single_module, c, t, cr, s, u, headers, prog_spec_cleaned): c for c, t, cr, s, u in crawl_tasks}
+    with ThreadPoolExecutor(max_workers=min(12, len(crawl_tasks))) as executor:
+        futures = {
+            executor.submit(crawl_single_module, c, t, cr, s, u, headers, prog_spec_cleaned): c
+            for c, t, cr, s, u in crawl_tasks
+        }
         for future in as_completed(futures):
             data_payload["modules"].append(future.result())
 
@@ -191,7 +226,13 @@ def extract_and_score_curriculum(programme_url):
 
 
 @app.route('/')
-def index():
+def home():
+    return render_template('coming_soon.html')
+
+
+@app.route('/SDGMapping')
+@app.route('/sdgmapping')
+def sdg_mapping():
     return render_template('Mapping.html')
 
 
@@ -199,19 +240,31 @@ def index():
 def scan_website():
     data = request.get_json()
     target_url = data.get('url')
-    if not target_url: return jsonify({"error": "No URL provided"}), 400
+    if not target_url:
+        return jsonify({"error": "No URL provided"}), 400
 
     structured_json, crawl_error = extract_and_score_curriculum(target_url)
-    if crawl_error: return jsonify({"error": crawl_error}), 400
+    if crawl_error:
+        return jsonify({"error": crawl_error}), 400
 
     return jsonify({
         "success": True,
         "programme_title": structured_json["programme"]["title"],
-        "modules": [{"code": m["code"], "title": m["title"], "scores": {k: v["score"] for k, v in m["sdg_scores"].items()}} for m in structured_json["modules"]],
-        "programme_scores": {k: v["score"] for k, v in structured_json["programme"]["programme_sdg_scores"].items()},
+        "modules": [
+            {
+                "code": m["code"],
+                "title": m["title"],
+                "scores": {k: v["score"] for k, v in m["sdg_scores"].items()}
+            }
+            for m in structured_json["modules"]
+        ],
+        "programme_scores": {
+            k: v["score"] for k, v in structured_json["programme"]["programme_sdg_scores"].items()
+        },
         "raw_payload": structured_json
     })
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
