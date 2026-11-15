@@ -18,24 +18,266 @@ app = Flask(__name__)
 
 CORE_COLUMNS = ["code", "title", "credits", "semester"]
 
+# Phrases stripped prior to scoring to prevent academic boilerplate false positives
+FALSE_POSITIVE_EXCLUSIONS = [
+    r'\bvirtual learning environment\b',
+    r'\blearning environment\b',
+    r'\bteaching environment\b',
+    r'\bacademic environment\b',
+    r'\bbusiness environment\b',
+    r'\bcommercial environment\b',
+    r'\bcorporate environment\b',
+    r'\bprogramming environment\b',
+    r'\bdevelopment environment\b',
+    r'\bsoftware environment\b',
+    r'\bcomputing environment\b',
+    r'\bcloud environment\b',
+    r'\bsimulation environment\b',
+    r'\bregulatory environment\b',
+    r'\bhigher education\b',
+    r'\bfurther education\b',
+    r'\bsecondary education\b',
+    r'\bprimary education\b',
+    r'\bmedical education\b',
+    r'\bclinical education\b',
+    r'\bengineering education\b',
+    r'\bwatercolour\b',
+    r'\bwatercolor\b',
+    r'\bwaterfall\b',
+]
+
+# Two-tier SDG Lexicon (UK Higher Education & UN Target aligned)
+# "explicit" terms carry a 1.0 keyword multiplier; "supportive" terms carry a 0.45 multiplier.
 SDG_KEYWORDS = {
-    "SDG 1 - No poverty": ["poverty", "income distributio", "wealth distributio", "socio-economic"],
-    "SDG 2 - Zero hunger": ["agriculture", "food", "insecurity", "nutrition"],
-    "SDG 3 - Good health and well-being": ["health", "well-being"],
-    "SDG 4 - Quality education": ["educat", "inclusive", "equitable"],
-    "SDG 5 - Gender equality": ["gender", "women", "equality", "inequality", "girl", "queer"],
-    "SDG 6 - Clean water and sanitation": ["water", "sanitation"],
-    "SDG 7 - Affordable and clean energy": ["energy", "renewable", "wind", "solar", "geothermal", "hydroelectric"],
-    "SDG 8 - Decent work and economic growth": ["employment", "econom", "economic growth", "sustainable developme", "labour", "worker", "circular econom", "wage"],
-    "SDG 9 - Industry, innovation and infrastructure": ["infrastructur", "innovation", "industr", "buildings"],
-    "SDG 10 - Reduced inequalities": ["trade", "inequality", "financial market", "taxation"],
-    "SDG 11 - Sustainable cities and communities": ["cities", "urban", "resilien", "rural"],
-    "SDG 12 - Responsible consumption and production": ["consum", "production", "waste", "natural resource", "recycl", "industrial ecology", "sustainabl e design"],
-    "SDG 13 - Climate action": ["climat", "greenhouse", "greenhouse gas", "environmen", "global warming", "carbon", "weather", "climate crisis"],
-    "SDG 14 - Life below water": ["ocean", "marine", "water", "pollut", "conserv", "fish"],
-    "SDG 15 - Life on land": ["forest", "biodiversit", "ecology", "pollut", "conserv", "land use"],
-    "SDG 16 - Peace, justice and strong institutions": ["justice", "governanc", "peace", "rights"],
-    "SDG 17 - Partnerships for the goals": ["partnership", "collaboration", "global cooperation", "stakeholder", "resource mobilization"]
+    "SDG 1 - No poverty": {
+        "explicit": [
+            "poverty", "extreme poverty", "multidimensional poverty", "alleviation of poverty",
+            "poverty reduction", "income distribution", "wealth distribution", "social protection",
+            "universal basic income", "living wage", "microfinance", "financial inclusion",
+            "homelessness", "material deprivation", "fuel poverty", "working poor",
+            "welfare state", "social safety net", "economic vulnerability"
+        ],
+        "supportive": [
+            "socio-economic", "socioeconomic", "deprivation", "disadvantaged",
+            "low-income", "low income", "redistribution", "welfare"
+        ]
+    },
+    "SDG 2 - Zero hunger": {
+        "explicit": [
+            "zero hunger", "food security", "food insecurity", "malnutrition", "undernourishment",
+            "sustainable agriculture", "agroecology", "food system", "food sovereignty",
+            "crop yield", "soil fertility", "regenerative agriculture", "organic farming",
+            "food supply chain", "famine", "micronutrient", "sustainable food",
+            "agrobiodiversity", "precision agriculture", "smallholder farmer"
+        ],
+        "supportive": [
+            "agriculture", "agricultural", "nutrition", "nutritional", "food",
+            "crop", "livestock", "farming", "agronomy", "horticulture"
+        ]
+    },
+    "SDG 3 - Good health and well-being": {
+        "explicit": [
+            "public health", "global health", "mental health", "well-being", "wellbeing",
+            "epidemiolog", "mortality", "morbidity", "non-communicable disease",
+            "infectious disease", "pandemic", "vaccine", "immunisation", "immunization",
+            "universal health coverage", "healthcare access", "maternal health",
+            "child health", "occupational health", "environmental health", "health inequality",
+            "health inequalities", "addiction", "substance abuse", "air pollution health"
+        ],
+        "supportive": [
+            "health", "healthcare", "clinical", "disease", "patient",
+            "pharmacolog", "therap", "psycholog", "well-being"
+        ]
+    },
+    "SDG 4 - Quality education": {
+        "explicit": [
+            "inclusive education", "equitable education", "education for sustainable development",
+            "lifelong learning", "widening participation", "educational inequality",
+            "educational inequalities", "digital literacy", "adult literacy",
+            "early childhood development", "universal access to education",
+            "global citizenship education", "pedagogical equity", "special educational needs"
+        ],
+        "supportive": [
+            "inclusive", "equitable", "literacy", "pedagog", "curriculum",
+            "access to education", "social mobility"
+        ]
+    },
+    "SDG 5 - Gender equality": {
+        "explicit": [
+            "gender equality", "gender inequality", "gender inequalities", "gender equity",
+            "women's rights", "female empowerment", "feminis", "gender-based violence",
+            "domestic violence", "gender pay gap", "reproductive rights", "reproductive health",
+            "intersectionality", "intersectional", "patriarch", "queer", "lgbtq",
+            "gender mainstreaming", "women in leadership", "unpaid care"
+        ],
+        "supportive": [
+            "gender", "women", "girl", "femininity", "masculinity", "sexism"
+        ]
+    },
+    "SDG 6 - Clean water and sanitation": {
+        "explicit": [
+            "clean water", "drinking water", "water quality", "water scarcity",
+            "water security", "water supply", "wastewater", "sewage", "sanitation",
+            "hygiene", "water treatment", "desalination", "water resource management",
+            "catchment management", "groundwater", "aquifer", "water pollution",
+            "hydrolog", "flood risk", "flood management", "water governance"
+        ],
+        "supportive": [
+            "water", "hydraulics", "drainage", "river", "freshwater", "irrigation"
+        ]
+    },
+    "SDG 7 - Affordable and clean energy": {
+        "explicit": [
+            "clean energy", "renewable energy", "affordable energy", "energy transition",
+            "decarbonisation of energy", "decarbonization of energy", "solar energy",
+            "solar power", "wind energy", "wind power", "offshore wind", "geothermal",
+            "hydroelectric", "hydropower", "bioenergy", "biofuel", "hydrogen economy",
+            "green hydrogen", "energy efficiency", "energy storage", "battery storage",
+            "smart grid", "energy poverty", "fossil fuel phase-out", "low-carbon energy"
+        ],
+        "supportive": [
+            "energy", "renewable", "solar", "wind", "grid", "photovoltaic", "turbine", "nuclear"
+        ]
+    },
+    "SDG 8 - Decent work and economic growth": {
+        "explicit": [
+            "decent work", "economic growth", "sustainable economic", "circular economy",
+            "green economy", "inclusive growth", "labour rights", "labor rights",
+            "worker rights", "modern slavery", "forced labour", "child labour",
+            "youth employment", "unemployment", "precarious work", "gig economy",
+            "occupational safety", "minimum wage", "living wage", "fair trade",
+            "social enterprise", "sustainable tourism"
+        ],
+        "supportive": [
+            "employment", "labour", "worker", "wage", "econom", "entrepreneur",
+            "productivity", "macroeconom", "microeconom"
+        ]
+    },
+    "SDG 9 - Industry, innovation and infrastructure": {
+        "explicit": [
+            "sustainable infrastructure", "resilient infrastructure", "green innovation",
+            "clean technology", "cleantech", "industrial decarbonisation",
+            "industrial decarbonization", "sustainable industrialisation",
+            "sustainable industrialization", "resource-use efficiency",
+            "retrofitting", "digital divide", "broadband access", "research and development",
+            "technological innovation", "low-carbon infrastructure", "smart infrastructure"
+        ],
+        "supportive": [
+            "infrastructur", "innovation", "industr", "buildings", "manufacturing",
+            "automation", "telecommunications", "transport network"
+        ]
+    },
+    "SDG 10 - Reduced inequalities": {
+        "explicit": [
+            "reduced inequalities", "reducing inequality", "social inequality",
+            "social inequalities", "economic inequality", "income inequality",
+            "wealth gap", "social inclusion", "marginalised", "marginalized",
+            "anti-discrimination", "racial justice", "racism", "decoloni",
+            "global south", "migration policy", "refugee", "asylum",
+            "disability rights", "accessibility", "progressive taxation", "fair trade"
+        ],
+        "supportive": [
+            "inequality", "inequalities", "equity", "equality", "discrimination",
+            "migration", "taxation", "financial market", "trade", "minority"
+        ]
+    },
+    "SDG 11 - Sustainable cities and communities": {
+        "explicit": [
+            "sustainable cities", "sustainable communities", "urban sustainability",
+            "urban resilience", "urban planning", "affordable housing", "social housing",
+            "public transport", "active travel", "sustainable transport", "green space",
+            "green spaces", "urban heat island", "air quality", "cultural heritage",
+            "natural heritage", "disaster risk reduction", "urban regeneration",
+            "smart cities", "slum", "informal settlement", "peri-urban"
+        ],
+        "supportive": [
+            "cities", "urban", "rural", "housing", "municipal", "resilien",
+            "built environment", "transport", "spatial planning"
+        ]
+    },
+    "SDG 12 - Responsible consumption and production": {
+        "explicit": [
+            "responsible consumption", "sustainable consumption", "sustainable production",
+            "circular economy", "life cycle assessment", "lifecycle assessment",
+            "life-cycle analysis", "waste management", "waste reduction", "zero waste",
+            "recycling", "remanufacturing", "industrial ecology", "sustainable design",
+            "ecodesign", "eco-design", "sustainable procurement", "sustainable supply chain",
+            "hazardous waste", "e-waste", "plastic pollution", "food waste",
+            "corporate social responsibility", "sustainability reporting", "esg"
+        ],
+        "supportive": [
+            "consum", "production", "waste", "natural resource", "recycl",
+            "supply chain", "packaging", "material efficiency"
+        ]
+    },
+    "SDG 13 - Climate action": {
+        "explicit": [
+            "climate change", "climate action", "climate crisis", "climate emergency",
+            "climate mitigation", "climate adaptation", "global warming",
+            "greenhouse gas", "carbon footprint", "carbon capture", "carbon neutral",
+            "net zero", "net-zero", "decarbonis", "decarboniz", "paris agreement",
+            "ipcc", "emissions trading", "carbon tax", "climate justice",
+            "climate resilience", "extreme weather", "sea level rise", "carbon sink"
+        ],
+        "supportive": [
+            "climat", "greenhouse", "environmen", "carbon", "emission",
+            "weather", "fossil fuel", "sustainability"
+        ]
+    },
+    "SDG 14 - Life below water": {
+        "explicit": [
+            "life below water", "marine", "ocean", "oceans", "marine ecosystem",
+            "marine biodiversity", "marine pollution", "ocean acidification",
+            "overfishing", "sustainable fisheries", "fisheries", "aquaculture",
+            "coral reef", "coastal erosion", "coastal management", "microplastic",
+            "plastic debris", "eutrophication", "deep sea", "maritime conservation"
+        ],
+        "supportive": [
+            "coastal", "aquatic", "estuar", "fish", "sea", "maritime"
+        ]
+    },
+    "SDG 15 - Life on land": {
+        "explicit": [
+            "life on land", "biodiversity", "ecosystem restoration", "deforestation",
+            "reforestation", "afforestation", "soil degradation", "soil erosion",
+            "desertification", "wildlife conservation", "habitat loss",
+            "endangered species", "invasive species", "terrestrial ecosystem",
+            "rewilding", "nature-based solution", "nature-based solutions",
+            "forest management", "peatland", "wetland", "land degradation"
+        ],
+        "supportive": [
+            "forest", "ecology", "ecological", "land use", "conservation",
+            "soil", "habitat", "flora", "fauna"
+        ]
+    },
+    "SDG 16 - Peace, justice and strong institutions": {
+        "explicit": [
+            "peace and justice", "strong institutions", "rule of law", "human rights",
+            "anti-corruption", "corruption", "bribery", "democratic governance",
+            "accountable institutions", "transparency", "access to justice",
+            "conflict resolution", "peacebuilding", "armed conflict", "war crimes",
+            "freedom of expression", "press freedom", "civic space", "civil liberties",
+            "inclusive decision-making", "transitional justice"
+        ],
+        "supportive": [
+            "justice", "governanc", "peace", "rights", "democra",
+            "legislation", "public policy", "accountability", "ethic"
+        ]
+    },
+    "SDG 17 - Partnerships for the goals": {
+        "explicit": [
+            "partnerships for the goals", "global partnership", "multi-stakeholder",
+            "multistakeholder", "international cooperation", "global cooperation",
+            "development assistance", "official development assistance",
+            "technology transfer", "capacity building", "capacity-building",
+            "debt sustainability", "sustainable finance", "north-south cooperation",
+            "south-south cooperation", "policy coherence", "public-private partnership"
+        ],
+        "supportive": [
+            "partnership", "collaboration", "stakeholder", "resource mobilization",
+            "international development", "global governance"
+        ]
+    }
 }
 
 SECTION_WEIGHTS = {
@@ -45,6 +287,20 @@ SECTION_WEIGHTS = {
     "module_summary": 0.2,
     "programme_specification": 0.1
 }
+
+TIER_MULTIPLIERS = {
+    "explicit": 1.0,
+    "supportive": 0.45
+}
+
+
+def clean_academic_boilerplate(text):
+    if not text:
+        return ""
+    cleaned = text
+    for pattern in FALSE_POSITIVE_EXCLUSIONS:
+        cleaned = re.sub(pattern, ' ', cleaned, flags=re.IGNORECASE)
+    return cleaned
 
 
 def parse_section_text(soup, heading_text):
@@ -73,17 +329,42 @@ def parse_section_text(soup, heading_text):
 
 def score_module_deterministically(module_record, prog_spec_text):
     scores_payload = {}
-    for sdg, terms in SDG_KEYWORDS.items():
+
+    cleaned_sections = {
+        section: clean_academic_boilerplate(
+            prog_spec_text if section == "programme_specification" else module_record.get(section, "")
+        )
+        for section in SECTION_WEIGHTS.keys()
+    }
+
+    for sdg, tier_dict in SDG_KEYWORDS.items():
         total_weighted_hits = 0.0
         evidence_segments = []
-        for section, weight in SECTION_WEIGHTS.items():
-            text_context = prog_spec_text if section == "programme_specification" else module_record.get(section, "")
+
+        for section, sec_weight in SECTION_WEIGHTS.items():
+            text_context = cleaned_sections[section]
             if not text_context:
                 continue
-            section_hits = sum(len(re.findall(r'\b' + re.escape(term), text_context, re.IGNORECASE)) for term in terms)
-            if section_hits > 0:
-                total_weighted_hits += (section_hits * weight)
-                evidence_segments.append(f"{section.replace('_', ' ').title()}: {section_hits} hits")
+
+            section_raw_hits = 0
+            matched_terms = []
+
+            for tier_name, terms in tier_dict.items():
+                tier_mult = TIER_MULTIPLIERS[tier_name]
+                for term in terms:
+                    matches = re.findall(r'\b' + re.escape(term), text_context, re.IGNORECASE)
+                    if matches:
+                        count = len(matches)
+                        section_raw_hits += count
+                        total_weighted_hits += (count * sec_weight * tier_mult)
+                        if term not in matched_terms:
+                            matched_terms.append(term)
+
+            if section_raw_hits > 0:
+                sample_terms = ", ".join(matched_terms[:4])
+                evidence_segments.append(
+                    f"{section.replace('_', ' ').title()}: {section_raw_hits} hits ({sample_terms})"
+                )
 
         if total_weighted_hits == 0:
             score, classification = 0, "None"
@@ -94,8 +375,9 @@ def score_module_deterministically(module_record, prog_spec_text):
 
         scores_payload[sdg] = {
             "score": score,
+            "weighted_value": round(total_weighted_hits, 2),
             "classification": classification,
-            "evidence_math_summary": ", ".join(evidence_segments) if evidence_segments else "No keywords matched"
+            "evidence_math_summary": "; ".join(evidence_segments) if evidence_segments else "No keywords matched"
         }
     return scores_payload
 
