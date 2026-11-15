@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sustainability Leeds — Coming Soon</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='SDG-logo.png') }}">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f8fafc;
+            color: #1e293b;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .card {
+            background: white;
+            padding: 48px 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+            max-width: 520px;
+            width: 100%;
+            border: 1px solid #e2e8f0;
+        }
+        img.logo {
+            width: 84px;
+            height: 84px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            margin: 0 0 12px;
+            font-size: 28px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        p {
+            margin: 0;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <img src="{{ url_for('static', filename='SDG-logo.png') }}" alt="UN SDG Wheel" class="logo">
+        <h1>Sustainability Leeds</h1>
+        <p>Coming Soon</p>
+    </div>
+</body>
+</html>
