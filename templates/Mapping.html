@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Institutional SDG Curriculum Analytics System</title>
-    
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='SDG-logo.png') }}">
-    
     <style>
         :root {
             --primary-color: #007bff;
@@ -221,8 +219,9 @@
     <div id="status"></div>
     
     <div class="workspace-stack">
+        <!-- PHASE 1: AUTOMATED PROGRAMME HEAT MAP MATRIX -->
         <div class="panel-box">
-            <h3>Programme SDG Heat Map Matrix</h3>
+            <h3 id="matrixTitle">Programme SDG Heat Map Matrix</h3>
             <div class="matrix-wrapper">
                 <table class="matrix-table" id="heatmapTable">
                     <thead>
@@ -244,6 +243,7 @@
             </p>
         </div>
 
+        <!-- PHASE 2: INTERACTIVE AI MODULE DIALOGUE CHAT BOX -->
         <div class="panel-box" style="padding:0; border:none; background:none;">
             <div class="chat-container">
                 <h3>Interactive Syllabus Dialogue Box</h3>
@@ -255,7 +255,7 @@
                 <div class="chat-history" id="chatBox">Welcome to the Interactive Audit Assistant. Run a hybrid scan above, then select a module from the dropdown to ask targeted questions about its syllabus, alignment details, or ways to improve its scores.</div>
                 
                 <div class="chat-input-area">
-                    <input type="text" id="chatInput" placeholder="Type a word or question (e.g., climate, health, summary, outcomes)..." disabled onkeypress="if(event.key==='Enter') sendChatMessage()">
+                    <input type="text" id="chatInput" placeholder="Ask about a specific SDG (e.g., 'Is SDG 6 included?'), learning outcomes, or improvements..." disabled onkeypress="if(event.key==='Enter') sendChatMessage()">
                     <button id="sendBtn" class="btn-primary" onclick="sendChatMessage()" disabled>Ask AI</button>
                 </div>
             </div>
@@ -273,6 +273,7 @@
         const downloadBtn = document.getElementById('downloadBtn');
         const statusDiv = document.getElementById('status');
         const matrixBody = document.getElementById('matrixBody');
+        const matrixTitle = document.getElementById('matrixTitle');
 
         if (!urlInput) { alert('Please supply a valid prospectus link parameter.'); return; }
 
@@ -292,26 +293,41 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: urlInput })
             });
-            const data = await response.json();
 
-            if (response.ok) {
-                statusDiv.style.backgroundColor = "#d4edda";
-                statusDiv.style.color = "#155724";
-                statusDiv.style.borderColor = "#c3e6cb";
-                statusDiv.innerText = `Success! Calculated matrix weights for ${data.modules.length} modules. Conversational mode unlocked.`;
-                
-                lastScannedDataset = data.raw_payload; 
-                downloadBtn.style.display = "inline-block";
-                
-                buildHeatMap(data.modules, data.programme_scores);
-                populateChatDropdown(data.modules);
-            } else {
+            if (!response.ok) {
+                let errMsg = `Server error (${response.status})`;
+                try {
+                    const errJson = await response.json();
+                    if (errJson.error) errMsg = errJson.error;
+                } catch (_) {
+                    const errText = await response.text();
+                    if (errText) errMsg = errText;
+                }
                 statusDiv.style.backgroundColor = "#f8d7da";
                 statusDiv.style.color = "#721c24";
                 statusDiv.style.borderColor = "#f5c6cb";
-                statusDiv.innerText = `Calculation Error: ${data.error}`;
+                statusDiv.innerText = `Calculation Error: ${errMsg}`;
+                return;
             }
+
+            const data = await response.json();
+
+            statusDiv.style.backgroundColor = "#d4edda";
+            statusDiv.style.color = "#155724";
+            statusDiv.style.borderColor = "#c3e6cb";
+            statusDiv.innerText = `Success! Calculated matrix weights for ${data.modules.length} modules. Conversational mode unlocked.`;
+            matrixTitle.innerText = `Heat Map: ${data.programme_title}`;
+            
+            lastScannedDataset = data.raw_payload; 
+            downloadBtn.style.display = "inline-block";
+            
+            buildHeatMap(data.modules, data.programme_scores);
+            populateChatDropdown(data.modules);
+
         } catch (err) {
+            statusDiv.style.backgroundColor = "#f8d7da";
+            statusDiv.style.color = "#721c24";
+            statusDiv.style.borderColor = "#f5c6cb";
             statusDiv.innerText = `Backend communication error: ${err.message}`;
         } finally {
             scanBtn.disabled = false;
@@ -354,7 +370,7 @@
         select.disabled = false;
         chatInput.disabled = false;
         sendBtn.disabled = false;
-        document.getElementById('chatBox').innerText = "System calibrated successfully! Choose a module from the dropdown above and query any metrics or syllabus topics directly.";
+        document.getElementById('chatBox').innerText = "System calibrated successfully! Choose a module from the dropdown above and ask about a specific SDG (e.g., 'Is SDG 6 included?'), learning outcomes, or score improvements.";
     }
 
     function sendChatMessage() {
@@ -363,10 +379,11 @@
         const chatBox = document.getElementById('chatBox');
         
         const code = select.value;
-        const msg = chatInput.value.trim().toLowerCase();
+        const rawMsg = chatInput.value.trim();
+        const msg = rawMsg.toLowerCase();
         
         if (!code) { alert("Please select a target module to analyze."); return; }
-        if (!msg) return;
+        if (!rawMsg) return;
 
         const currentMod = lastScannedDataset.modules.find(m => m.code === code);
         chatInput.value = ''; 
@@ -376,46 +393,56 @@
         if (!currentMod) {
             reply = "Error tracking module data object in local workspace buffer memory.";
         } else {
-            if (msg.includes("improve") || msg.includes("upgrade") || msg.includes("raise") || msg.includes("score")) {
+            const sdgMatch = msg.match(/\bsdg\s*([1-9]|1[0-7])\b/);
+
+            if (sdgMatch) {
+                const sdgNum = parseInt(sdgMatch[1], 10);
+                const fullKey = `SDG ${sdgNum} - ${getSdgShortName(sdgNum)}`;
+                const meta = currentMod.sdg_scores[fullKey];
+
+                if (meta && meta.score > 0) {
+                    reply = `**Yes — ${fullKey} is present in ${currentMod.code} (${currentMod.title}).**\n`;
+                    reply += `* **Calculated Score:** ${meta.score} — ${meta.classification}\n`;
+                    reply += `* **Evidence Breakdown:** ${meta.evidence_math_summary}`;
+                } else {
+                    reply = `**No — ${fullKey} is not evident in ${currentMod.code} (${currentMod.title}).**\n`;
+                    reply += `* **Calculated Score:** 0 — None (no matching keywords detected across Learning Outcomes, Syllabus, Objectives, Summary, or Programme Specification).`;
+                }
+            }
+            else if (msg.includes("improve") || msg.includes("upgrade") || msg.includes("raise") || msg.includes("score")) {
                 let lowScores = [];
                 for (let k in currentMod.sdg_scores) {
                     if (currentMod.sdg_scores[k].score < 2) lowScores.push(k);
                 }
-                reply = `### Strategic Recommendations to Improve ${currentMod.code} Target Alignments:\n`;
-                reply += `To raise scores to **2 (Significant / Explicit)**, update your high-weight areas (Learning Outcomes or Syllabus modules):\n\n`;
-                reply += `* **Action Plan:** Explicitly link assessment targets to sustainable development frameworks.\n`;
-                reply += `* **Target Gaps:** Add explicit text focus fields for these matching categories: _${lowScores.slice(0, 4).join(", ")}_.`;
+                reply = `**Strategic Recommendations to Improve ${currentMod.code} Alignments:**\n`;
+                reply += `To raise scores to **2 (Significant / Explicit)**, integrate sustainability terminology into higher-weighted sections (**Learning Outcomes** [1.0] or **Syllabus** [0.8]):\n`;
+                reply += `* **Target Gaps:** ${lowScores.slice(0, 5).join(", ")}.`;
             } 
             else if (msg.includes("outcome") || msg.includes("learning")) {
-                reply = `### Learning Outcomes Profile for ${currentMod.code}:\n`;
-                reply += currentMod.learning_outcomes ? `"${currentMod.learning_outcomes}"` : "_No explicit learning outcomes block text found on this catalogue page node._";
+                reply = `**Learning Outcomes for ${currentMod.code}:**\n`;
+                reply += currentMod.learning_outcomes ? `"${currentMod.learning_outcomes}"` : "_No explicit learning outcomes block found on this catalogue page._";
             }
             else if (msg.includes("syllabus") || msg.includes("topic") || msg.includes("teach")) {
-                reply = `### Syllabus Architecture Context for ${currentMod.code}:\n`;
-                reply += currentMod.syllabus ? `"${currentMod.syllabus}"` : "_No structural syllabus block text listed under this specific resource identifier._";
+                reply = `**Syllabus Content for ${currentMod.code}:**\n`;
+                reply += currentMod.syllabus ? `"${currentMod.syllabus}"` : "_No structural syllabus block listed under this module._";
             }
             else {
                 let scoreSummary = [];
-                let activeMatch = false;
-
                 for (let k in currentMod.sdg_scores) {
                     let sMeta = currentMod.sdg_scores[k];
-                    if (sMeta.score > 0 || msg.includes(k.toLowerCase()) || msg.length < 4) {
-                        if (sMeta.score > 0) {
-                            scoreSummary.push(`* **${k}** [Score ${sMeta.score} — ${sMeta.classification}]: Verified via evidence keyword counts: _${sMeta.evidence_math_summary}_`);
-                            activeMatch = true;
-                        }
+                    if (sMeta.score > 0) {
+                        scoreSummary.push(`* **${k}** [Score ${sMeta.score} — ${sMeta.classification}]: ${sMeta.evidence_math_summary}`);
                     }
                 }
                 
-                reply = `### Institutional Verification Report for ${currentMod.code} — ${currentMod.title}\n\n`;
-                reply += `**Module Text Summary Context:**\n${currentMod.module_summary || "_No baseline structural overview text paragraph discovered._"}\n\n`;
-                reply += `**Algorithmic Framework Detections:**\n`;
-                reply += activeMatch ? scoreSummary.join("\n") : "_No active sustainability keyword patterns were discovered across the parsed syllabus sections for this specific query criteria._";
+                reply = `**Verification Report for ${currentMod.code} — ${currentMod.title}**\n\n`;
+                reply += `**Module Summary:**\n${currentMod.module_summary || "_No summary paragraph found._"}\n\n`;
+                reply += `**Detected SDGs:**\n`;
+                reply += scoreSummary.length > 0 ? scoreSummary.join("\n") : "_No sustainability keywords matched across any parsed sections._";
             }
         }
 
-        chatBox.innerHTML += `\n\n<hr style="border:0; border-top:1px dashed #cbd5e1; margin:15px 0;"><strong>You:</strong> ${msg.toUpperCase()}\n\n<strong>System Intelligence Layer:</strong>\n${reply}`;
+        chatBox.innerHTML += `\n\n<hr style="border:0; border-top:1px dashed #cbd5e1; margin:15px 0;"><strong>You:</strong> ${rawMsg}\n\n<strong>Assistant:</strong>\n${reply}`;
         chatBox.scrollTop = chatBox.scrollHeight; 
     }
 
