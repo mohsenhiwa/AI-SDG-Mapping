@@ -226,10 +226,6 @@ def extract_and_score_curriculum(programme_url):
 
 
 @app.route('/')
-def home():
-    return render_template('coming_soon.html')
-
-
 @app.route('/SDGMapping')
 @app.route('/sdgmapping')
 def sdg_mapping():
