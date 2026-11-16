@@ -18,7 +18,6 @@ app = Flask(__name__)
 
 CORE_COLUMNS = ["code", "title", "credits", "semester"]
 
-# Phrases stripped prior to scoring to prevent academic boilerplate false positives
 FALSE_POSITIVE_EXCLUSIONS = [
     r'\bvirtual learning environment\b',
     r'\blearning environment\b',
@@ -46,8 +45,6 @@ FALSE_POSITIVE_EXCLUSIONS = [
     r'\bwaterfall\b',
 ]
 
-# Two-tier SDG Lexicon (UK Higher Education & UN Target aligned)
-# "explicit" terms carry a 1.0 keyword multiplier; "supportive" terms carry a 0.45 multiplier.
 SDG_KEYWORDS = {
     "SDG 1 - No poverty": {
         "explicit": [
@@ -541,6 +538,106 @@ def scan_website():
         },
         "raw_payload": structured_json
     })
+
+
+@app.route('/api/chat', methods=['POST'])
+def chat_with_curriculum():
+    data = request.get_json()
+    user_message = data.get('message', '').strip()
+    history = data.get('history', [])
+    module_data = data.get('module_data')
+    programme_data = data.get('programme_data')
+
+    if not user_message:
+        return jsonify({"error": "Empty message"}), 400
+
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    if not gemini_key:
+        return jsonify({"error": "GEMINI_API_KEY is not set in Render Environment Variables."}), 500
+
+    if module_data:
+        matched_sdgs = {
+            k: v for k, v in module_data.get("sdg_scores", {}).items() if v.get("score", 0) > 0
+        }
+        scores_json = json.dumps(matched_sdgs, indent=2) if matched_sdgs else "No SDGs scored above 0."
+        context_block = (
+            "TARGET MODULE: " + str(module_data.get('code')) + " - " + str(module_data.get('title')) +
+            " (Credits: " + str(module_data.get('credits')) + ", Semester: " + str(module_data.get('semester')) + ")\n" +
+            "MODULE SUMMARY: " + (module_data.get('module_summary') or "Not provided") + "\n" +
+            "OBJECTIVES: " + (module_data.get('objectives') or "Not provided") + "\n" +
+            "LEARNING OUTCOMES: " + (module_data.get('learning_outcomes') or "Not provided") + "\n" +
+            "SYLLABUS: " + (module_data.get('syllabus') or "Not provided") + "\n\n" +
+            "DETERMINISTIC SDG SCORES & EVIDENCE FOR THIS MODULE:\n" + scores_json
+        )
+    else:
+        prog_title = programme_data.get("title", "Unknown Programme") if programme_data else "Unknown Programme"
+        prog_scores = programme_data.get("programme_sdg_scores", {}) if programme_data else {}
+        mod_summaries = data.get("all_modules_summary", [])
+        context_block = (
+            "TARGET SCOPE: ENTIRE DEGREE PROGRAMME - " + str(prog_title) + "\n" +
+            "PROGRAMME-LEVEL NET SDG SCORES:\n" + json.dumps(prog_scores, indent=2) + "\n\n" +
+            "ALL MODULES IN PROGRAMME (Code, Title, and SDGs with score > 0):\n" +
+            json.dumps(mod_summaries, indent=2)
+        )
+
+    system_instruction = (
+        "You are an expert UK Higher Education Curriculum & Education for Sustainable Development (ESD) Advisor "
+        "embedded inside the Institutional SDG Curriculum Analytics System.\n\n"
+        "Your role is to help university lecturers, programme leaders, and quality assurance reviewers understand "
+        "how their modules align with the 17 UN Sustainable Development Goals (SDGs) and provide practical, constructive pedagogical advice.\n\n"
+        "Rules:\n"
+        "1. Ground your answers strictly in the provided module/programme syllabus data and deterministic scoring evidence below. Do not invent syllabus topics that are not in the text.\n"
+        "2. Remember how our scoring system works: Learning Outcomes carry weight 1.0, Syllabus 0.8, Objectives 0.5, Summary 0.2. "
+        "Explicit sustainability keywords carry a 1.0 multiplier, while broad supportive terms carry 0.45. A score > 2.2 gives rating 2 (Significant/Explicit); > 0 to 2.2 gives rating 1 (Some/Implicit).\n"
+        "3. When asked how to improve a module's SDG alignment, suggest concrete, academically rigorous rewrites of Learning Outcomes "
+        "(using Bloom's taxonomy verbs) or syllabus topics tailored to the module's specific discipline.\n"
+        "4. Use clear, concise UK English with bullet points and bold headings where helpful.\n\n"
+        "CURRICULUM CONTEXT:\n" + context_block
+    )
+
+    contents = []
+    for turn in history[-8:]:
+        gemini_role = "model" if turn["role"] == "assistant" else "user"
+        contents.append({
+            "role": gemini_role,
+            "parts": [{"text": turn["content"]}]
+        })
+    contents.append({
+        "role": "user",
+        "parts": [{"text": user_message}]
+    })
+
+    gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + gemini_key
+    payload = {
+        "systemInstruction": {
+            "parts": [{"text": system_instruction}]
+        },
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.4,
+            "maxOutputTokens": 1200
+        }
+    }
+
+    try:
+        resp = requests.post(gemini_url, json=payload, timeout=30)
+        if not resp.ok:
+            err_detail = resp.text
+            try:
+                err_json = resp.json()
+                err_detail = err_json.get("error", {}).get("message", resp.text)
+            except Exception:
+                pass
+            logging.error(f"Gemini API HTTP {resp.status_code}: {err_detail}")
+            return jsonify({"error": f"Gemini API Error ({resp.status_code}): {err_detail}"}), 500
+
+        resp_data = resp.json()
+        reply_text = resp_data["candidates"][0]["content"]["parts"][0]["text"]
+        return jsonify({"reply": reply_text})
+
+    except Exception as e:
+        logging.error(f"Gemini Chat Exception: {e}")
+        return jsonify({"error": f"AI service error: {str(e)}"}), 500
 
 
 if __name__ == '__main__':
