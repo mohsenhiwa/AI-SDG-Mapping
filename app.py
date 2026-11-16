@@ -615,30 +615,47 @@ def chat_with_curriculum():
         "contents": contents,
         "generationConfig": {
             "temperature": 0.4,
-            "maxOutputTokens": 1200
+            "maxOutputTokens": 4096,
+            "thinkingConfig": {
+                "thinkingBudget": 512
+            }
         }
     }
 
     try:
-        resp = requests.post(gemini_url, json=payload, timeout=30)
-        if not resp.ok:
-            err_detail = resp.text
-            try:
-                err_json = resp.json()
-                err_detail = err_json.get("error", {}).get("message", resp.text)
-            except Exception:
-                pass
-            logging.error(f"Gemini API HTTP {resp.status_code}: {err_detail}")
-            return jsonify({"error": f"Gemini API Error ({resp.status_code}): {err_detail}"}), 500
+        full_reply_parts = []
+        for _ in range(3):
+            resp = requests.post(gemini_url, json=payload, timeout=45)
+            if not resp.ok:
+                err_detail = resp.text
+                try:
+                    err_json = resp.json()
+                    err_detail = err_json.get("error", {}).get("message", resp.text)
+                except Exception:
+                    pass
+                logging.error(f"Gemini API HTTP {resp.status_code}: {err_detail}")
+                return jsonify({"error": f"Gemini API Error ({resp.status_code}): {err_detail}"}), 500
 
-        resp_data = resp.json()
-        reply_text = resp_data["candidates"][0]["content"]["parts"][0]["text"]
-        return jsonify({"reply": reply_text})
+            resp_data = resp.json()
+            candidate = resp_data["candidates"][0]
+            chunk_text = "".join(
+                part.get("text", "") for part in candidate.get("content", {}).get("parts", [])
+            )
+            full_reply_parts.append(chunk_text)
+
+            if candidate.get("finishReason") != "MAX_TOKENS":
+                break
+
+            # Automatically fetch remaining text if MAX_TOKENS was still reached
+            payload["contents"].append({"role": "model", "parts": [{"text": chunk_text}]})
+            payload["contents"].append({"role": "user", "parts": [{"text": "Continue exactly where you stopped."}]})
+
+        return jsonify({"reply": "".join(full_reply_parts)})
 
     except Exception as e:
         logging.error(f"Gemini Chat Exception: {e}")
         return jsonify({"error": f"AI service error: {str(e)}"}), 500
-
+    
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
