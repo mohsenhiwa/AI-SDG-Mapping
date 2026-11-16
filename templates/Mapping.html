@@ -472,4 +472,217 @@
         for (let i = 1; i <= 17; i++) {
             const key = "SDG " + i + " - " + getSdgShortName(i);
             const pVal = (progScores[key] && typeof progScores[key].score === "number") ? progScores[key].score : 0;
-            netRow.push({ v: pVal, t: "n", s: getScoreStyle(pVal, true)
+            netRow.push({ v: pVal, t: "n", s: getScoreStyle(pVal, true) });
+        }
+        wsRows.push(netRow);
+
+        // Legend footer
+        wsRows.push([]);
+        wsRows.push([
+            { v: "Legend:", s: { font: { bold: true, sz: 10 } } },
+            { v: "0 = None", s: getScoreStyle(0, false) },
+            { v: "1 = Some (Implicit)", s: getScoreStyle(1, false) },
+            { v: "2 = Significant (Explicit)", s: getScoreStyle(2, false) }
+        ]);
+
+        const ws1 = XLSX.utils.aoa_to_sheet(wsRows);
+        ws1["!cols"] = [
+            { wch: 16 },
+            { wch: 42 },
+            { wch: 10 },
+            { wch: 14 },
+            ...Array(17).fill({ wch: 15 })
+        ];
+        ws1["!rows"] = [{ hpt: 24 }, { hpt: 18 }, { hpt: 10 }, { hpt: 34 }];
+
+        // --- SHEET 2: AUDIT EVIDENCE BREAKDOWN ---
+        const evRows = [];
+        evRows.push([
+            { v: "Module Code", s: headerStyle },
+            { v: "Module Title", s: headerStyle },
+            { v: "UN Sustainable Development Goal", s: headerStyle },
+            { v: "Rating (0-2)", s: headerStyle },
+            { v: "Classification", s: headerStyle },
+            { v: "Weighted Score", s: headerStyle },
+            { v: "Matched Section & Keyword Evidence", s: headerStyle }
+        ]);
+
+        modules.forEach(m => {
+            for (let i = 1; i <= 17; i++) {
+                const key = "SDG " + i + " - " + getSdgShortName(i);
+                const meta = m.sdg_scores[key];
+                if (meta && meta.score > 0) {
+                    evRows.push([
+                        { v: m.code, s: textCellStyle },
+                        { v: m.title, s: textCellStyle },
+                        { v: key, s: textCellStyle },
+                        { v: meta.score, t: "n", s: getScoreStyle(meta.score, false) },
+                        { v: meta.classification, s: textCellStyle },
+                        { v: meta.weighted_value || 0, t: "n", s: { ...textCellStyle, alignment: { horizontal: "center" } } },
+                        { v: meta.evidence_math_summary, s: textCellStyle }
+                    ]);
+                }
+            }
+        });
+
+        const ws2 = XLSX.utils.aoa_to_sheet(evRows);
+        ws2["!cols"] = [
+            { wch: 14 },
+            { wch: 36 },
+            { wch: 38 },
+            { wch: 12 },
+            { wch: 22 },
+            { wch: 15 },
+            { wch: 65 }
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws1, "SDG Heat Map");
+        XLSX.utils.book_append_sheet(wb, ws2, "Scoring Evidence");
+
+        const safeFileName = progTitle.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || "SDG_Curriculum_Audit";
+        XLSX.writeFile(wb, safeFileName + "_SDG_Heatmap.xlsx");
+    }
+
+    function populateChatDropdown(modules) {
+        const select = document.getElementById('moduleSelect');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        chatHistory = [];
+        select.innerHTML = '<option value="PROGRAMME_ALL">Entire Programme Overview (Cross-Module Analysis)</option>';
+        modules.forEach(m => {
+            select.innerHTML += '<option value="' + m.code + '">' + m.code + ' - ' + m.title + '</option>';
+        });
+
+        select.disabled = false;
+        chatInput.disabled = false;
+        sendBtn.disabled = false;
+        document.getElementById('chatBox').innerHTML = "<strong>AI Curriculum Advisor Ready:</strong> Select either the <em>Entire Programme Overview</em> or a specific module above, and ask any question (e.g., <em>'Draft two new learning outcomes to embed SDG 12 and 13 into this module'</em> or <em>'Which SDGs are missing across this degree?'</em>).";
+    }
+
+    function resetChatHistory() {
+        chatHistory = [];
+        const select = document.getElementById('moduleSelect');
+        const label = select.options[select.selectedIndex].text;
+        document.getElementById('chatBox').innerHTML = "<strong>Context Switched:</strong> Now advising on <em>" + label + "</em>. Ask a question below.";
+    }
+
+    function formatMarkdownToHtml(text) {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/^### (.*$)/gim, '<h4 style="margin:10px 0 4px; color:#0f172a;">$1</h4>')
+            .replace(/^\* (.*$)/gim, '• $1')
+            .replace(/^- (.*$)/gim, '• $1')
+            .replace(/\n/g, '<br>');
+    }
+
+    async function sendChatMessage() {
+        const select = document.getElementById('moduleSelect');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatBox = document.getElementById('chatBox');
+
+        const selectedVal = select.value;
+        const rawMsg = chatInput.value.trim();
+
+        if (!selectedVal) {
+            alert("Please select a target module or programme scope.");
+            return;
+        }
+        if (!rawMsg) return;
+
+        chatInput.value = '';
+        chatInput.disabled = true;
+        sendBtn.disabled = true;
+
+        const loadingId = "msg-" + Date.now();
+        chatBox.innerHTML += '<br><br><hr style="border:0; border-top:1px dashed #cbd5e1; margin:15px 0;"><strong>You:</strong> ' + rawMsg + '<br><br><div id="' + loadingId + '" style="color:#64748b; font-style:italic;">Thinking...</div>';
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        let payload = {
+            message: rawMsg,
+            history: chatHistory
+        };
+
+        if (selectedVal === "PROGRAMME_ALL") {
+            payload.programme_data = lastScannedDataset.programme;
+            payload.all_modules_summary = lastScannedDataset.modules.map(m => ({
+                code: m.code,
+                title: m.title,
+                active_sdgs: Object.fromEntries(
+                    Object.entries(m.sdg_scores)
+                        .filter(([_, v]) => v.score > 0)
+                        .map(([k, v]) => [k, v.score])
+                )
+            }));
+        } else {
+            payload.module_data = lastScannedDataset.modules.find(m => m.code === selectedVal);
+        }
+
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            const replyDiv = document.getElementById(loadingId);
+
+            if (!response.ok) {
+                replyDiv.style.color = "#991b1b";
+                replyDiv.style.fontStyle = "normal";
+                replyDiv.innerHTML = "<strong>Error:</strong> " + (data.error || "Failed to reach AI advisor.");
+            } else {
+                replyDiv.style.color = "var(--text-main)";
+                replyDiv.style.fontStyle = "normal";
+                replyDiv.innerHTML = "<strong>AI Advisor:</strong><br>" + formatMarkdownToHtml(data.reply);
+
+                chatHistory.push({ role: "user", content: rawMsg });
+                chatHistory.push({ role: "assistant", content: data.reply });
+            }
+        } catch (err) {
+            const replyDiv = document.getElementById(loadingId);
+            replyDiv.style.color = "#991b1b";
+            replyDiv.innerHTML = "<strong>Connection Error:</strong> " + err.message;
+        } finally {
+            chatInput.disabled = false;
+            sendBtn.disabled = false;
+            chatInput.focus();
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    }
+
+    function downloadStructuredJson() {
+        if (!lastScannedDataset) {
+            alert("No dataset found in browser memory.");
+            return;
+        }
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(lastScannedDataset, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", "deterministic_sdg_audit.json");
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+    }
+
+    function getSdgShortName(idx) {
+        const shortNames = [
+            "", "No poverty", "Zero hunger", "Good health and well-being", "Quality education",
+            "Gender equality", "Clean water and sanitation", "Affordable and clean energy",
+            "Decent work and economic growth", "Industry, innovation and infrastructure",
+            "Reduced inequalities", "Sustainable cities and communities", "Responsible consumption and production",
+            "Climate action", "Life below water", "Life on land", "Peace, justice and strong institutions",
+            "Partnerships for the goals"
+        ];
+        return shortNames[idx];
+    }
+</script>
+</body>
+</html>
